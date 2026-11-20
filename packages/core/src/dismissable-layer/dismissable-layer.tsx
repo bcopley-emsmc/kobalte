@@ -26,7 +26,6 @@ import {
 	createMemo,
 	createSignal,
 	omit,
-	onSettled,
 	type Ref,
 	untrack,
 } from "solid-js";
@@ -199,40 +198,37 @@ export function DismissableLayer<T extends ValidComponent = "div">(
 		{ preventDefault: false },
 	);
 
-	onSettled(() => {
-		if (!ref()) {
-			return;
-		}
-
-		layerStack.addLayer({
-			node: ref()!,
-			isPointerBlocking: isPointerBlocking(),
-			dismiss: props.onDismiss,
-		});
-
-		const unregisterFromParentLayer = parentContext?.registerNestedLayer(
-			ref()!,
-		);
-
-		layerStack.assignPointerEventToLayers();
-
-		layerStack.disableBodyPointerEvents(ref()!);
-
-		return () => {
-			if (!ref()) {
+	createEffect(
+		() => ref(),
+		(node) => {
+			if (!node) {
 				return;
 			}
 
-			layerStack.removeLayer(ref()!);
+			layerStack.addLayer({
+				node,
+				isPointerBlocking: isPointerBlocking(),
+				dismiss: props.onDismiss,
+			});
 
-			unregisterFromParentLayer?.();
+			const unregisterFromParentLayer = parentContext?.registerNestedLayer(node);
 
-			// Re-assign pointer event to remaining layers.
 			layerStack.assignPointerEventToLayers();
 
-			layerStack.restoreBodyPointerEvents(ref()!);
-		};
-	});
+			layerStack.disableBodyPointerEvents(node);
+
+			return () => {
+				layerStack.removeLayer(node);
+
+				unregisterFromParentLayer?.();
+
+				// Re-assign pointer event to remaining layers.
+				layerStack.assignPointerEventToLayers();
+
+				layerStack.restoreBodyPointerEvents(node);
+			};
+		},
+	);
 
 	createEffect(
 		() => ({ ref: ref(), disabled: isPointerBlocking() }),
